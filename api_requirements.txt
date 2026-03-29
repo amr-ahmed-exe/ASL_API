@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+tensorflow
+opencv-python-headless
+cvzone
+mediapipe
+numpy
+Pillow
+pyenchant

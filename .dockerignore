@@ -1,0 +1,9 @@
+# تجاهل كل ملفات وفولدرات المشروع بلا استثناء
+*
+
+# السماح بدخول الملفات الأساسية للسيرفر فقط (Allowlist)
+!app.py
+!sign_language_model.tflite
+!white.jpg
+!api_requirements.txt
+!Dockerfile
