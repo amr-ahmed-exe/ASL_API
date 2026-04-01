@@ -4,7 +4,7 @@ python-multipart
 tensorflow
 opencv-python-headless
 cvzone
-mediapipe
+mediapipe==0.10.14
 numpy
 Pillow
 pyenchant
