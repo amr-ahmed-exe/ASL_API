@@ -77,9 +77,7 @@ def predict_from_skeleton(pts):
     pts[:, 0] *= 720.0
     pts[:, 1] *= 1280.0
 
-    # 2. عكس المراية
-    max_x_val = np.max(pts[:, 0])
-    pts[:, 0] = max_x_val - pts[:, 0]
+    # ملحوظة: المراية متلغية لأن Flutter بيبعت الإحداثيات معكوسة تلقائياً من الكاميرا الأمامية
 
     # 3. التمركز حول نقطة الصفر
     min_x, min_y = pts.min(axis=0)
@@ -652,6 +650,10 @@ async def websocket_predict(websocket: WebSocket):
             
             final_word = ""
             suggestions = []
+
+            # اقتراحات حية وهي الكلمة بتتكتب
+            if current_word and len(current_word) >= 2:
+                suggestions = get_suggestions(current_word)
             
             if word_committed and current_word:
                 suggested_words = get_suggestions(current_word)
