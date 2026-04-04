@@ -209,10 +209,10 @@ def predict_from_skeleton(pts):
         if pts[2][1] + 15 < pts[16][1]:
             ch1 = 3
 
-    # con for [l][x]
+    # con for [l][x] - لو الموديل مطلعها X بس هي في الحقيقة L (السبابة مفرودة لفوق)
     l = [[6, 4], [6, 1], [6, 2]]
     if pl in l:
-        if distance(pts[4], pts[11]) > 55:
+        if pts[8][1] < pts[6][1]:  # السبابة مفرودة = L
             ch1 = 4
 
     # con for [l][d]
@@ -300,10 +300,10 @@ def predict_from_skeleton(pts):
         if distance(pts[8], pts[16]) > 50:
             ch1 = 6
 
-    # con for [l][x]
+    # con for [l][x] - لو الموديل مطلعها L بس هي في الحقيقة X (السبابة متنية زي الخطاف)
     l = [[4, 6], [4, 2], [4, 1], [4, 4]]
     if pl in l:
-        if distance(pts[4], pts[11]) < 60:
+        if pts[8][1] > pts[6][1]:  # السبابة متنية = X
             ch1 = 6
 
     # con for [x][d]
