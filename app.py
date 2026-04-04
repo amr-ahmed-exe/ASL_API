@@ -78,33 +78,23 @@ def predict_from_skeleton(pts):
     """
     pts = np.array(pts, dtype=np.float32)
 
-    # 1. تحويل النسب لبيكسلات (نفس القيمة للإتنين عشان منشوهش الإيد!)
-    # ملاحظة: الرقم مش مهم لأن Palm-Length Normalization هيظبط الحجم بعدين
+    # 1. تحويل النسب لبيكسلات (نفس القيمة عشان منشوهش الإيد)
     pts *= 640.0
 
-    # 2. المراية متلغية من السيرفر — Flutter بقى بيعكس الإحداثيات صح قبل ما يبعتها
+    # 2. المراية متلغية — Flutter بيعكس صح
 
     # 3. التمركز حول نقطة الصفر
     min_x, min_y = pts.min(axis=0)
     pts = pts - [min_x, min_y]
 
-    # -----------------------------------------------------------------------
-    # 🌟 Palm-Length Normalization
-    # التكبير بناءً على طول كف الإيد (المعصم → قاعدة الأوسط) = ثابت دايماً
-    # -----------------------------------------------------------------------
-    palm_length = distance(pts[0], pts[9])
-    scale = 80.0 / (palm_length + 1e-6)
-    pts = pts * scale
+    # 4. حساب الأبعاد بعد التمركز
+    max_x, max_y = pts.max(axis=0)
+    w = max_x
+    h = max_y
 
-    # 4. حساب الأبعاد الجديدة بعد التكبير
-    min_x2, min_y2 = pts.min(axis=0)
-    max_x2, max_y2 = pts.max(axis=0)
-    w_scaled = max_x2 - min_x2
-    h_scaled = max_y2 - min_y2
-
-    # 5. التوسيط في الشاشة الـ 400x400
-    ox = int((400 - w_scaled) / 2)
-    oy = int((400 - h_scaled) / 2)
+    # 5. التوسيط في الشاشة الـ 400x400 (بنفس offset الأصلي بتاع cvzone)
+    ox = int((400 - w) / 2)
+    oy = int((400 - h) / 2)
 
     pts = pts.astype(int)
     white = WHITE_IMG.copy()
@@ -143,7 +133,8 @@ def predict_from_skeleton(pts):
     # -----------------------------------------------------------------------
     # Inference 
     # -----------------------------------------------------------------------
-    res = white.reshape(1, 400, 400, 3).astype('float32') 
+    # /255.0 عشان الموديل متدرب على قيم 0-1 (Keras rescale=1./255)
+    res = white.reshape(1, 400, 400, 3).astype('float32') / 255.0
     
     # DEBUG: حفظ صورة الـ skeleton كل 30 فريم عشان نشوفها
     global _debug_frame_counter
