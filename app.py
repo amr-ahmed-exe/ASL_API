@@ -78,8 +78,8 @@ def predict_from_skeleton(pts):
     # لو لقيت الموديل بيطلع حروف عشوائية، شيل الـ # من السطرين الجايين 
     # علشان يعكس الإيد لو كانت جاية من الفلاتر زي المراية
     # -----------------------------------------------------------------------
-    # max_x_val = np.max(pts[:, 0])
-    # pts[:, 0] = max_x_val - pts[:, 0]
+    max_x_val = np.max(pts[:, 0])
+    pts[:, 0] = max_x_val - pts[:, 0]
 
     # حساب حدود الإيد (Bounding Box)
     min_x, min_y = pts.min(axis=0)
@@ -291,11 +291,12 @@ def predict_from_skeleton(pts):
         if distance(pts[8], pts[16]) > 50:
             ch1 = 6
 
-    # con for [l][x]
-    l = [[4, 6], [4, 2], [4, 1], [4, 4]]
-    if pl in l:
-        if distance(pts[4], pts[11]) < 60:
-            ch1 = 6
+    # con for [l][x] — DISABLED: distance threshold breaks on mobile (small hand)
+    # l = [[4, 6], [4, 2], [4, 1], [4, 4]]
+    # if pl in l:
+    #     if distance(pts[4], pts[11]) < 60:
+    #         ch1 = 6
+    pass  # مؤقتاً — شيل الـ pass ورجّع الشرط لما تلاقي الموبايل ظبط
 
     # con for [x][d]
     l = [[1, 4], [1, 6], [1, 0], [1, 2]]
