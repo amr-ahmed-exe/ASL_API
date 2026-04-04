@@ -82,9 +82,7 @@ def predict_from_skeleton(pts):
     # ملاحظة: الرقم مش مهم لأن Palm-Length Normalization هيظبط الحجم بعدين
     pts *= 640.0
 
-    # 2. عكس المراية (عشان cvzone كانت بتستخدم flipType=True في التدريب)
-    max_x_val = np.max(pts[:, 0])
-    pts[:, 0] = max_x_val - pts[:, 0]
+    # 2. المراية متلغية من السيرفر — Flutter بقى بيعكس الإحداثيات صح قبل ما يبعتها
 
     # 3. التمركز حول نقطة الصفر
     min_x, min_y = pts.min(axis=0)
