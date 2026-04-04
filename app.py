@@ -64,6 +64,11 @@ def distance(x, y):
     return math.sqrt(((x[0] - y[0]) ** 2) + ((x[1] - y[1]) ** 2))
 
 # ---------------------------------------------------------------------------
+# Debug counter for skeleton image saving
+# ---------------------------------------------------------------------------
+_debug_frame_counter = 0
+
+# ---------------------------------------------------------------------------
 # Core prediction logic (Skeleton Based)
 # ---------------------------------------------------------------------------
 def predict_from_skeleton(pts):
@@ -141,10 +146,24 @@ def predict_from_skeleton(pts):
     # Inference 
     # -----------------------------------------------------------------------
     res = white.reshape(1, 400, 400, 3).astype('float32') 
+    
+    # DEBUG: حفظ صورة الـ skeleton كل 30 فريم عشان نشوفها
+    global _debug_frame_counter
+    _debug_frame_counter += 1
+    if _debug_frame_counter % 30 == 1:
+        debug_path = os.path.join(SCRIPT_DIR, "debug_skeleton.jpg")
+        cv2.imwrite(debug_path, white)
+        print(f"[DEBUG] Skeleton image saved to {debug_path}")
+    
     interpreter.set_tensor(input_details[0]['index'], res)
     interpreter.invoke()
     prob_tensor = interpreter.get_tensor(output_details[0]['index'])
     prob = np.array(prob_tensor[0], dtype="float32")
+    
+    # DEBUG: طباعة الاحتمالات عشان نشوف الموديل بيختار إيه
+    if _debug_frame_counter % 30 == 1:
+        print(f"[DEBUG] Raw probabilities: {prob}")
+        print(f"[DEBUG] Top group: {np.argmax(prob)} (confidence: {np.max(prob):.4f})")
     
     ch1 = np.argmax(prob, axis=0)
     prob[ch1] = 0
@@ -554,6 +573,15 @@ def get_suggestions(word: str, max_count: int = 4) -> list[str]:
 @app.get("/")
 def health_check():
     return {"status": "running", "message": "Sign Language API"}
+
+@app.get("/debug/skeleton")
+def get_debug_skeleton():
+    """عشان نشوف صورة الـ skeleton اللي الموديل بيشوفها"""
+    from fastapi.responses import FileResponse
+    debug_path = os.path.join(SCRIPT_DIR, "debug_skeleton.jpg")
+    if os.path.exists(debug_path):
+        return FileResponse(debug_path, media_type="image/jpeg")
+    return {"error": "No debug image yet. Send a frame first."}
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...), current_word: str = Form(default="")):
