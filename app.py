@@ -84,8 +84,7 @@ def predict_from_skeleton(pts):
     # -----------------------------------------------------------------------
     # MIRROR FIX: عكس الإيد عشان الكاميرا الأمامية
     # -----------------------------------------------------------------------
-    max_x_val = np.max(pts[:, 0])
-    pts[:, 0] = max_x_val - pts[:, 0]
+    pts[:, 0] = -pts[:, 0]
 
     # حساب حدود الإيد (Bounding Box)
     min_x, min_y = pts.min(axis=0)
@@ -94,47 +93,50 @@ def predict_from_skeleton(pts):
     w = max_x - min_x
     h = max_y - min_y
 
-    # إرجاع الـ Scale (عشان الإيد دايماً تكون 300 بيكسل والموديل ميخرفش مع الكاميرات العالية)
-    scale = 300.0 / max(w, h + 1e-6)
+    # توحيد الحجم لـ 200 بيكسل (الحجم القياسي اللي الـ CNN والـ Heuristics متدربين عليه)
+    scale = 200.0 / max(w, h + 1e-6)
     pts = (pts - [min_x, min_y]) * scale
 
-    # التوسيط في نص الصورة الـ 400x400
-    ox = int((400 - (w * scale)) / 2)
-    os1 = int((400 - (h * scale)) / 2)
+    w_scaled = w * scale
+    h_scaled = h * scale
+
+    # التوسيط مع نفس الإزاحة القديمة (+14 بيكسل) عشان الموديل ميحسش بأي تغيير
+    ox = int((400 - w_scaled) / 2) + 14
+    oy = int((400 - h_scaled) / 2) + 14
 
     pts = pts.astype(int)
     white = WHITE_IMG.copy()
 
     # Draw skeleton lines
     for t in range(0, 4):
-        cv2.line(white, (pts[t][0] + ox, pts[t][1] + os1),
-                 (pts[t + 1][0] + ox, pts[t + 1][1] + os1), (0, 255, 0), 3)
+        cv2.line(white, (pts[t][0] + ox, pts[t][1] + oy),
+                 (pts[t + 1][0] + ox, pts[t + 1][1] + oy), (0, 255, 0), 3)
     for t in range(5, 8):
-        cv2.line(white, (pts[t][0] + ox, pts[t][1] + os1),
-                 (pts[t + 1][0] + ox, pts[t + 1][1] + os1), (0, 255, 0), 3)
+        cv2.line(white, (pts[t][0] + ox, pts[t][1] + oy),
+                 (pts[t + 1][0] + ox, pts[t + 1][1] + oy), (0, 255, 0), 3)
     for t in range(9, 12):
-        cv2.line(white, (pts[t][0] + ox, pts[t][1] + os1),
-                 (pts[t + 1][0] + ox, pts[t + 1][1] + os1), (0, 255, 0), 3)
+        cv2.line(white, (pts[t][0] + ox, pts[t][1] + oy),
+                 (pts[t + 1][0] + ox, pts[t + 1][1] + oy), (0, 255, 0), 3)
     for t in range(13, 16):
-        cv2.line(white, (pts[t][0] + ox, pts[t][1] + os1),
-                 (pts[t + 1][0] + ox, pts[t + 1][1] + os1), (0, 255, 0), 3)
+        cv2.line(white, (pts[t][0] + ox, pts[t][1] + oy),
+                 (pts[t + 1][0] + ox, pts[t + 1][1] + oy), (0, 255, 0), 3)
     for t in range(17, 20):
-        cv2.line(white, (pts[t][0] + ox, pts[t][1] + os1),
-                 (pts[t + 1][0] + ox, pts[t + 1][1] + os1), (0, 255, 0), 3)
+        cv2.line(white, (pts[t][0] + ox, pts[t][1] + oy),
+                 (pts[t + 1][0] + ox, pts[t + 1][1] + oy), (0, 255, 0), 3)
 
-    cv2.line(white, (pts[5][0] + ox, pts[5][1] + os1),
-             (pts[9][0] + ox, pts[9][1] + os1), (0, 255, 0), 3)
-    cv2.line(white, (pts[9][0] + ox, pts[9][1] + os1),
-             (pts[13][0] + ox, pts[13][1] + os1), (0, 255, 0), 3)
-    cv2.line(white, (pts[13][0] + ox, pts[13][1] + os1),
-             (pts[17][0] + ox, pts[17][1] + os1), (0, 255, 0), 3)
-    cv2.line(white, (pts[0][0] + ox, pts[0][1] + os1),
-             (pts[5][0] + ox, pts[5][1] + os1), (0, 255, 0), 3)
-    cv2.line(white, (pts[0][0] + ox, pts[0][1] + os1),
-             (pts[17][0] + ox, pts[17][1] + os1), (0, 255, 0), 3)
+    cv2.line(white, (pts[5][0] + ox, pts[5][1] + oy),
+             (pts[9][0] + ox, pts[9][1] + oy), (0, 255, 0), 3)
+    cv2.line(white, (pts[9][0] + ox, pts[9][1] + oy),
+             (pts[13][0] + ox, pts[13][1] + oy), (0, 255, 0), 3)
+    cv2.line(white, (pts[13][0] + ox, pts[13][1] + oy),
+             (pts[17][0] + ox, pts[17][1] + oy), (0, 255, 0), 3)
+    cv2.line(white, (pts[0][0] + ox, pts[0][1] + oy),
+             (pts[5][0] + ox, pts[5][1] + oy), (0, 255, 0), 3)
+    cv2.line(white, (pts[0][0] + ox, pts[0][1] + oy),
+             (pts[17][0] + ox, pts[17][1] + oy), (0, 255, 0), 3)
 
     for i in range(21):
-        cv2.circle(white, (pts[i][0] + ox, pts[i][1] + os1), 2, (0, 0, 255), 1)
+        cv2.circle(white, (pts[i][0] + ox, pts[i][1] + oy), 2, (0, 0, 255), 1)
 
     # -----------------------------------------------------------------------
     # Inference 
