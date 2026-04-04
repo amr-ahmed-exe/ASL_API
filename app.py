@@ -68,23 +68,32 @@ def distance(x, y):
 # ---------------------------------------------------------------------------
 def predict_from_skeleton(pts):
     """
-    Given 21 normalized points from Flutter, convert to 400x400 canvas,
+    Given 21 points from Flutter, convert to 400x400 canvas,
     run the CNN model, apply post-processing rules, and return predicted letter.
     """
     pts = np.array(pts, dtype=np.float32)
 
-    # Normalization & Center Padding (300px scale inside 400x400)
+    # -----------------------------------------------------------------------
+    # MIRROR FIX: 
+    # لو لقيت الموديل بيطلع حروف عشوائية، شيل الـ # من السطرين الجايين 
+    # علشان يعكس الإيد لو كانت جاية من الفلاتر زي المراية
+    # -----------------------------------------------------------------------
+    # max_x_val = np.max(pts[:, 0])
+    # pts[:, 0] = max_x_val - pts[:, 0]
+
+    # حساب حدود الإيد (Bounding Box)
     min_x, min_y = pts.min(axis=0)
     max_x, max_y = pts.max(axis=0)
 
     w = max_x - min_x
     h = max_y - min_y
 
-    scale = 300.0 / max(w, h + 1e-6)
-    pts = (pts - [min_x, min_y]) * scale
+    # تصفير الإحداثيات علشان تبدأ من (0,0)
+    pts = pts - [min_x, min_y]
 
-    ox = int((400 - (w * scale)) / 2)
-    os1 = int((400 - (h * scale)) / 2)  # Named os1 to match older rule offsets
+    # حساب الأوفسيت علشان نرسم الإيد في نص الصورة الـ 400x400 (زي كود Tkinter بالظبط)
+    ox = int((400 - w) // 2) - 15
+    os1 = int((400 - h) // 2) - 15
 
     pts = pts.astype(int)
     white = WHITE_IMG.copy()
