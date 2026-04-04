@@ -88,12 +88,13 @@ def predict_from_skeleton(pts):
     w = max_x - min_x
     h = max_y - min_y
 
-    # تصفير الإحداثيات علشان تبدأ من (0,0)
-    pts = pts - [min_x, min_y]
+    # إرجاع الـ Scale (عشان الإيد دايماً تكون 300 بيكسل والموديل ميخرفش مع الكاميرات العالية)
+    scale = 300.0 / max(w, h + 1e-6)
+    pts = (pts - [min_x, min_y]) * scale
 
-    # حساب الأوفسيت علشان نرسم الإيد في نص الصورة الـ 400x400 (زي كود Tkinter بالظبط)
-    ox = int((400 - w) // 2) - 15
-    os1 = int((400 - h) // 2) - 15
+    # التوسيط في نص الصورة الـ 400x400
+    ox = int((400 - (w * scale)) / 2)
+    os1 = int((400 - (h * scale)) / 2)
 
     pts = pts.astype(int)
     white = WHITE_IMG.copy()
@@ -291,12 +292,11 @@ def predict_from_skeleton(pts):
         if distance(pts[8], pts[16]) > 50:
             ch1 = 6
 
-    # con for [l][x] — DISABLED: distance threshold breaks on mobile (small hand)
-    # l = [[4, 6], [4, 2], [4, 1], [4, 4]]
-    # if pl in l:
-    #     if distance(pts[4], pts[11]) < 60:
-    #         ch1 = 6
-    pass  # مؤقتاً — شيل الـ pass ورجّع الشرط لما تلاقي الموبايل ظبط
+    # con for [l][x]
+    l = [[4, 6], [4, 2], [4, 1], [4, 4]]
+    if pl in l:
+        if distance(pts[4], pts[11]) < 60:
+            ch1 = 6
 
     # con for [x][d]
     l = [[1, 4], [1, 6], [1, 0], [1, 2]]
@@ -557,15 +557,16 @@ async def websocket_predict(websocket: WebSocket):
     history = deque(maxlen=7)      
     current_word = ""              
     last_confirmed_letter = None   
+    last_appended_letter = None    
     consecutive_count = 0          
     REQUIRED_CONSECUTIVE = 5       
+    missing_frames = 0             # 👈 العداد الجديد لمنع الفليكر
     
     last_action_time = time.time()
     WORD_COMMIT_TIMEOUT = 1.5      
     
     try:
         while True:
-            # نستقبل JSON كـ String
             data_text = await websocket.receive_text()
             pts = json.loads(data_text)
             
@@ -573,19 +574,28 @@ async def websocket_predict(websocket: WebSocket):
                 status = "no_hand_detected"
                 letter = None
             else:
-                # Prediction in thread to avoid blocking asyncio
                 letter, status = await loop.run_in_executor(None, predict_from_skeleton, pts)
             
             now = time.time()
             word_committed = False
             
+            # --- المعالجة الجديدة لاختفاء الإيد ---
             if status == "no_hand_detected":
+                missing_frames += 1
+                # لو الإيد اختفت لأكتر من 5 فريمات (حوالي نص ثانية)، هنصفر الحرف عشان لو عاوز تكتب LL
+                if missing_frames > 5:
+                    last_appended_letter = None 
+                    
+                # لو عدى ثانية ونص، بنقفل الكلمة ونجيب الاقتراحات
                 if current_word and ((now - last_action_time) > WORD_COMMIT_TIMEOUT):
                     word_committed = True
-            
+            else:
+                missing_frames = 0  # تصفير العداد أول ما الإيد تظهر
+                
             smoothed_letter = None
             confirmed_letter = None
             
+            # لو لقطنا حرف
             if letter and status == "success":
                 history.append(letter)
                 smoothed_letter = Counter(history).most_common(1)[0][0]
@@ -596,6 +606,7 @@ async def websocket_predict(websocket: WebSocket):
                     consecutive_count = 1
                     last_confirmed_letter = smoothed_letter
                 
+                # لما نتأكد من الحرف بعد 5 فريمات ثبات
                 if consecutive_count == REQUIRED_CONSECUTIVE:
                     confirmed_letter = smoothed_letter
                     last_action_time = now  
@@ -603,11 +614,16 @@ async def websocket_predict(websocket: WebSocket):
                     if confirmed_letter == " ":
                         if current_word:
                             word_committed = True
+                        last_appended_letter = " "
                     else:
-                        current_word += confirmed_letter
-                        history.clear()
-                        last_confirmed_letter = None
-                        consecutive_count = 0
+                        # هنضيف الحرف للكلمة بس لو كان مختلف عن آخر حرف اتضاف
+                        if confirmed_letter != last_appended_letter:
+                            current_word += confirmed_letter
+                            last_appended_letter = confirmed_letter
+                            
+                    history.clear()
+                    last_confirmed_letter = None
+                    consecutive_count = 0
             
             final_word = ""
             suggestions = []
@@ -623,6 +639,7 @@ async def websocket_predict(websocket: WebSocket):
                 current_word = ""
                 history.clear()
                 last_confirmed_letter = None
+                last_appended_letter = None
                 consecutive_count = 0
                 last_action_time = now
 
@@ -645,3 +662,4 @@ async def websocket_predict(websocket: WebSocket):
             await websocket.close()
         except:
             pass
+
