@@ -71,7 +71,7 @@ _debug_frame_counter = 0
 # ---------------------------------------------------------------------------
 # Core prediction logic (Skeleton Based)
 # ---------------------------------------------------------------------------
-def predict_from_skeleton(pts):
+def predict_from_skeleton(pts, numeric_context=False):
     """
     Given 21 points from Flutter, convert to 400x400 canvas,
     run the CNN model, apply post-processing rules, and return predicted letter.
@@ -516,11 +516,94 @@ def predict_from_skeleton(pts):
                 and pts[14][1] < pts[16][1] and pts[18][1] < pts[20][1]):
             ch1 = "R"
 
-    # Space detection
-    if ch1 == 1 or ch1 == "E" or ch1 == "S" or ch1 == "X" or ch1 == "Y" or ch1 == "B":
-        if (pts[6][1] > pts[8][1] and pts[10][1] < pts[12][1]
-                and pts[14][1] < pts[16][1] and pts[18][1] > pts[20][1]):
-            ch1 = " "
+    # -----------------------------------------------------------------------
+    # 🛡️ STRICT OVERRIDES FOR EXPERT ACCURACY & NUMBERS
+    # -----------------------------------------------------------------------
+    thumb_tip = pts[4]; thumb_ip = pts[3]
+    index_tip = pts[8]; index_base = pts[5]
+    middle_tip = pts[12]; middle_base = pts[9]
+    ring_tip = pts[16]; ring_base = pts[13]
+    pinky_tip = pts[20]; pinky_base = pts[17]
+
+    index_up = index_tip[1] < index_base[1]
+    middle_up = middle_tip[1] < middle_base[1]
+    ring_up = ring_tip[1] < ring_base[1]
+    pinky_up = pinky_tip[1] < pinky_base[1]
+    
+    index_folded = index_tip[1] > index_base[1]
+    middle_folded = middle_tip[1] > middle_base[1]
+    ring_folded = ring_tip[1] > ring_base[1]
+    pinky_folded = pinky_tip[1] > pinky_base[1]
+
+    # M / N / T & A / S (All fingers folded except maybe thumb)
+    if index_folded and middle_folded and ring_folded and pinky_folded:
+        if thumb_tip[0] > ring_base[0]:  
+            ch1 = "M"
+        elif thumb_tip[0] > middle_base[0]:
+            ch1 = "N"
+        elif thumb_tip[0] > index_base[0]:
+            ch1 = "T"
+        elif thumb_tip[0] < index_base[0]: # Thumb closed on the side or front
+            if thumb_tip[1] < index_base[1]: # Thumb straight up alongside index
+                ch1 = "A"
+            else: # Thumb wrapped across front
+                ch1 = "S"
+
+    # E / O / C
+    if index_folded and middle_folded and ring_folded and pinky_folded:
+        if distance(thumb_tip, index_tip) < 25: 
+            ch1 = "O"
+        elif thumb_tip[1] > index_tip[1] and distance(thumb_tip, index_tip) > 25: 
+            ch1 = "C"
+        elif thumb_tip[0] < index_base[0] and thumb_tip[1] > index_base[1]:
+            ch1 = "E"
+
+    # K / P & G / Q (Differentiating by hand direction)
+    hand_pointing_down = pts[0][1] < pts[9][1] 
+    if ch1 == "K" and hand_pointing_down: ch1 = "P"
+    if ch1 == "P" and not hand_pointing_down: ch1 = "K"
+    if ch1 == "G" and hand_pointing_down: ch1 = "Q"
+    if ch1 == "Q" and not hand_pointing_down: ch1 = "G"
+
+    # H / U / R / V / 2
+    if index_up and middle_up and ring_folded and pinky_folded:
+        dist_im = distance(index_tip, middle_tip)
+        if index_tip[0] > middle_tip[0] + 10: 
+            ch1 = "R"
+        elif dist_im < 30: # Touching
+            if abs(index_tip[0] - index_base[0]) > abs(index_tip[1] - index_base[1]): 
+                ch1 = "H"
+            else:
+                ch1 = "U"
+        else: # Not touching
+            ch1 = "V"
+
+    # Space detection (Index straight forward, others closed, thumb out, or specific ASL Space)
+    # A common space trigger: sweeping motion, or pinching thumb + index 
+    # For now, we enhance the previous rule: index straight forward, middle/ring/pinky folded
+    if distance(pts[4], pts[8]) < 10 and middle_up and ring_up and pinky_up:
+        pass # could be F/9
+    else:
+        if type(ch1) == str and ch1 in ["X", "Y", "B", "E", "S", "1"]:
+            if index_up == False and middle_folded and ring_folded and pinky_folded and thumb_tip[0] < index_base[0] - 30:
+                ch1 = " "
+
+    # Numbers
+    if numeric_context:
+        if ch1 == "O": ch1 = "0"
+        elif ch1 == "F": ch1 = "9"
+        elif ch1 == "V": ch1 = "2"
+        elif ch1 == "W": ch1 = "3"
+        elif index_up and middle_folded and ring_folded and pinky_folded and thumb_tip[0] < index_base[0]:
+            ch1 = "1"
+        elif index_up and middle_up and ring_up and pinky_up:
+            ch1 = "5"
+        elif distance(thumb_tip, pinky_tip) < 20 and index_up and middle_up and ring_up:
+            ch1 = "6"
+        elif distance(thumb_tip, ring_tip) < 20 and index_up and middle_up and pinky_up:
+            ch1 = "7"
+        elif distance(thumb_tip, middle_tip) < 20 and index_up and ring_up and pinky_up:
+            ch1 = "8"
 
     return str(ch1), "success"
 
@@ -534,7 +617,7 @@ def predict_letter(cv2image: np.ndarray):
     hand = hands[0]
     
     # We pass the points to the new skeleton pipeline
-    return predict_from_skeleton(hand["lmList"])
+    return predict_from_skeleton(hand["lmList"], False)
 
 # ---------------------------------------------------------------------------
 # Suggestions helper
@@ -604,19 +687,32 @@ async def websocket_predict(websocket: WebSocket):
     REQUIRED_CONSECUTIVE = 5       
     missing_frames = 0             # 👈 العداد الجديد لمنع الفليكر
     
+    # Temporal tracking for dynamic letters (J, Z)
+    j_z_history = deque(maxlen=15)
+    numeric_context = False
+    
     last_action_time = time.time()
     WORD_COMMIT_TIMEOUT = 1.5      
     
     try:
         while True:
             data_text = await websocket.receive_text()
+            
+            if data_text == "MODE:NUMBER":
+                numeric_context = True
+                continue
+            elif data_text == "MODE:LETTER":
+                numeric_context = False
+                continue
+                
             pts = json.loads(data_text)
             
             if not pts or len(pts) != 21:
                 status = "no_hand_detected"
                 letter = None
             else:
-                letter, status = await loop.run_in_executor(None, predict_from_skeleton, pts)
+                j_z_history.append((pts[8], pts[20])) # store index tip, pinky tip
+                letter, status = await loop.run_in_executor(None, predict_from_skeleton, pts, numeric_context)
             
             now = time.time()
             word_committed = False
@@ -634,6 +730,20 @@ async def websocket_predict(websocket: WebSocket):
             else:
                 missing_frames = 0  # تصفير العداد أول ما الإيد تظهر
                 
+            # -- Temporal overrides for J and Z --
+            if status == "success" and letter in ["I", "D", "J", "Z"] and len(j_z_history) > 10:
+                # check J trace using Pinky (downwards and curved left for right hand)
+                start_p = j_z_history[0][1]
+                end_p = j_z_history[-1][1]
+                if letter in ["I", "J"] and end_p[1] > start_p[1] + 30 and abs(end_p[0] - start_p[0]) > 20:
+                    letter = "J"
+                
+                # check Z trace using Index (zig zag)
+                start_i = j_z_history[0][0]
+                end_i = j_z_history[-1][0]
+                if letter in ["D", "Z"] and abs(end_i[0] - start_i[0]) > 30 and abs(end_i[1] - start_i[1]) > 20:
+                    letter = "Z"
+
             smoothed_letter = None
             confirmed_letter = None
             
