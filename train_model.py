@@ -1,11 +1,9 @@
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-import matplotlib.pyplot as plt
 from typing import Tuple, List, Dict, Optional, Any
 
 
@@ -19,6 +17,7 @@ class SignLanguageCSVDataset(Dataset):
         Args:
             csv_file: Path to the CSV file containing the dataset
         """
+        import pandas as pd
         self.data = pd.read_csv(csv_file)
         self.labels = self.data['label'].values
         self.features = self.data.drop('label', axis=1).values.astype(float)
@@ -281,6 +280,7 @@ def train_model(csv_file: str, epochs: int = 100, batch_size: int = 64,
                 break
 
     # Create figure with two subplots
+    import matplotlib.pyplot as plt
     plt.figure(figsize=(12, 5))
     
     # Plot accuracy
