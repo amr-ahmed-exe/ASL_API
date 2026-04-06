@@ -415,16 +415,20 @@ def predict_from_skeleton(pts, numeric_context=False):
     # 🛡️ STRICT OVERRIDES FOR MOBILE ANGLES (حماية من الكاميرا الأمامية)
     # -----------------------------------------------------------------------
     # بما إن كاميرا الموبايل بتبص للإيد من تحت، الموديل بيتلخبط.
-    # الكود ده بيجبر السيرفر يقرا إشارة L من شكل الصوابع مباشرة:
+    # التعديل الجديد: استخدام المسافة للمفصل عشان يشتغل حتى لو الإيد مايلة
     
-    index_up = pts[8][1] < pts[5][1]       # السبابة مفرودة لفوق
-    middle_down = pts[12][1] > pts[9][1]   # الوسطى متنية لتحت
-    ring_down = pts[16][1] > pts[13][1]    # البنصر متني لتحت
-    pinky_down = pts[20][1] > pts[17][1]   # الخنصر متني لتحت
-    thumb_out = abs(pts[4][0] - pts[9][0]) > 30  # الإبهام مفرود لبره
+    # دالة بسيطة لمعرفة لو الصباع مفرود ولا متني باستخدام المسافة من المعصم
+    def is_finger_extended(tip, pip, wrist_pt):
+        return distance(tip, wrist_pt) > distance(pip, wrist_pt)
 
-    # لو الإيد واخدة وضع الـ L الحقيقي، افرض النتيجة وامسح أي تخريف فات
-    if index_up and middle_down and ring_down and pinky_down and thumb_out:
+    index_up_L = is_finger_extended(pts[8], pts[6], pts[0])
+    middle_down_L = not is_finger_extended(pts[12], pts[10], pts[0])
+    ring_down_L = not is_finger_extended(pts[16], pts[14], pts[0])
+    pinky_down_L = not is_finger_extended(pts[20], pts[18], pts[0])
+    thumb_out_L = distance(pts[4], pts[9]) > 40  # الإبهام مفرود لبره
+
+    # لو الإيد واخدة وضع الـ L الحقيقي
+    if index_up_L and middle_down_L and ring_down_L and pinky_down_L and thumb_out_L:
         ch1 = 4  # المجموعة 4 = L
 
     # -----------------------------------------------------------------------
@@ -519,21 +523,22 @@ def predict_from_skeleton(pts, numeric_context=False):
     # -----------------------------------------------------------------------
     # 🛡️ STRICT OVERRIDES FOR EXPERT ACCURACY & NUMBERS
     # -----------------------------------------------------------------------
-    thumb_tip = pts[4]; thumb_ip = pts[3]
-    index_tip = pts[8]; index_base = pts[5]
-    middle_tip = pts[12]; middle_base = pts[9]
-    ring_tip = pts[16]; ring_base = pts[13]
-    pinky_tip = pts[20]; pinky_base = pts[17]
+    thumb_tip = pts[4]; thumb_ip = pts[3]; thumb_base = pts[2]
+    index_tip = pts[8]; index_pip = pts[6]; index_base = pts[5]
+    middle_tip = pts[12]; middle_pip = pts[10]; middle_base = pts[9]
+    ring_tip = pts[16]; ring_pip = pts[14]; ring_base = pts[13]
+    pinky_tip = pts[20]; pinky_pip = pts[18]; pinky_base = pts[17]
+    wrist = pts[0]
 
-    index_up = index_tip[1] < index_base[1]
-    middle_up = middle_tip[1] < middle_base[1]
-    ring_up = ring_tip[1] < ring_base[1]
-    pinky_up = pinky_tip[1] < pinky_base[1]
+    index_up = is_finger_extended(index_tip, index_pip, wrist)
+    middle_up = is_finger_extended(middle_tip, middle_pip, wrist)
+    ring_up = is_finger_extended(ring_tip, ring_pip, wrist)
+    pinky_up = is_finger_extended(pinky_tip, pinky_pip, wrist)
     
-    index_folded = index_tip[1] > index_base[1]
-    middle_folded = middle_tip[1] > middle_base[1]
-    ring_folded = ring_tip[1] > ring_base[1]
-    pinky_folded = pinky_tip[1] > pinky_base[1]
+    index_folded = not index_up
+    middle_folded = not middle_up
+    ring_folded = not ring_up
+    pinky_folded = not pinky_up
 
     # M / N / T & A / S (All fingers folded except maybe thumb)
     if index_folded and middle_folded and ring_folded and pinky_folded:
@@ -699,8 +704,46 @@ async def websocket_predict(websocket: WebSocket):
             elif data_text == "MODE:LETTER":
                 numeric_context = False
                 continue
+            elif data_text == "CLEAR":
+                current_word = ""
+                current_sentence = ""
+                history.clear()
+                last_confirmed_letter = None
+                last_appended_letter = None
+                consecutive_count = 0
+                missing_frames = 0
+                continue
                 
-            pts = json.loads(data_text)
+            # 💡 Handling Suggestion Tap from Flutter Client
+            if data_text.startswith("COMMIT:") or data_text.startswith("SELECT:"):
+                selected_word = data_text.split(":", 1)[1] if ":" in data_text else data_text
+                if current_sentence:
+                    current_sentence += " " + selected_word
+                else:
+                    current_sentence = selected_word
+                current_word = ""
+                history.clear()
+                last_confirmed_letter = None
+                last_appended_letter = None
+                consecutive_count = 0
+                continue
+                
+            try:
+                pts = json.loads(data_text)
+            except json.JSONDecodeError:
+                # If they send plain text (just the word itself) when tapping a suggestion
+                if isinstance(data_text, str) and len(data_text.strip()) > 0 and len(data_text) < 50:
+                    selected_word = data_text.strip()
+                    if current_sentence:
+                        current_sentence += " " + selected_word
+                    else:
+                        current_sentence = selected_word
+                    current_word = ""
+                    history.clear()
+                    last_confirmed_letter = None
+                    last_appended_letter = None
+                    consecutive_count = 0
+                continue
             
             if not pts or len(pts) != 21:
                 status = "no_hand_detected"
