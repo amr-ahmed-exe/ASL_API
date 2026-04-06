@@ -578,15 +578,9 @@ def predict_from_skeleton(pts, numeric_context=False):
         else: # Not touching
             ch1 = "V"
 
-    # Space detection (Index straight forward, others closed, thumb out, or specific ASL Space)
-    # A common space trigger: sweeping motion, or pinching thumb + index 
-    # For now, we enhance the previous rule: index straight forward, middle/ring/pinky folded
-    if distance(pts[4], pts[8]) < 10 and middle_up and ring_up and pinky_up:
-        pass # could be F/9
-    else:
-        if type(ch1) == str and ch1 in ["X", "Y", "B", "E", "S", "1"]:
-            if index_up == False and middle_folded and ring_folded and pinky_folded and thumb_tip[0] < index_base[0] - 30:
-                ch1 = " "
+    # Space detection (Index and Pinky up, Middle and Ring folded - 🤘 gesture)
+    if index_up and pinky_up and middle_folded and ring_folded:
+        ch1 = " "
 
     # Numbers
     if numeric_context:
