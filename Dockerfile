@@ -2,7 +2,7 @@
 FROM python:3.10-slim
 
 # 2. تحديث قائمة الباكدجات بدون تسطيب مكتبات غير مستخدمة
-RUN apt-get update && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libenchant-2-dev && rm -rf /var/lib/apt/lists/*
 
 # 3. تحديد مجلد العمل جوه الكونتينر
 WORKDIR /app
