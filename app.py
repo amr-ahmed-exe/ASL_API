@@ -675,6 +675,7 @@ async def websocket_predict(websocket: WebSocket):
     
     history = deque(maxlen=7)      
     current_word = ""              
+    current_sentence = ""          # 👈 العداد الجديد للجمل
     last_confirmed_letter = None   
     last_appended_letter = None    
     consecutive_count = 0          
@@ -771,20 +772,22 @@ async def websocket_predict(websocket: WebSocket):
                     last_confirmed_letter = None
                     consecutive_count = 0
             
-            final_word = ""
             suggestions = []
-
-            # اقتراحات حية وهي الكلمة بتتكتب
             if current_word and len(current_word) >= 2:
                 suggestions = get_suggestions(current_word)
-            
+                
             if word_committed and current_word:
                 suggested_words = get_suggestions(current_word)
                 if suggested_words:
-                    final_word = suggested_words[0]
+                    word_to_add = suggested_words[0]
                     suggestions = suggested_words
                 else:
-                    final_word = current_word
+                    word_to_add = current_word
+                
+                if current_sentence:
+                    current_sentence += " " + word_to_add
+                else:
+                    current_sentence = word_to_add
                 
                 current_word = ""
                 history.clear()
@@ -793,6 +796,14 @@ async def websocket_predict(websocket: WebSocket):
                 consecutive_count = 0
                 last_action_time = now
 
+            # النص اللي هيتعرض على الموبايل
+            display_text = current_sentence
+            if current_word:
+                if display_text:
+                    display_text += " " + current_word
+                else:
+                    display_text = current_word
+
             await websocket.send_json({
                 "status": status,
                 "raw_prediction": letter,               
@@ -800,7 +811,7 @@ async def websocket_predict(websocket: WebSocket):
                 "confirmed_letter": confirmed_letter,   
                 "current_word": current_word,           
                 "word_committed": word_committed,       
-                "final_word": final_word,               
+                "final_word": display_text,               
                 "suggestions": suggestions              
             })
             
