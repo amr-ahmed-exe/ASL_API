@@ -11,8 +11,10 @@ WORKDIR /app
 COPY requirements.txt .
 
 # 5. تسطيب مكتبات البايثون
-# استخدمنا no-cache-dir عشان نقلل حجم الكونتينر النهائي
-RUN pip install --no-cache-dir -r requirements.txt
+# --extra-index-url عشان pip يجيب torch بنسخة CPU فقط (بدون CUDA ~2GB)
+RUN pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements.txt
 
 # 6. نسخ باقي ملفات المشروع (app.py, train_model.py, sign_language_model.pth)
 COPY . .

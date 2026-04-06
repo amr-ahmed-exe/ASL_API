@@ -1,6 +1,7 @@
 fastapi==0.115.0
 uvicorn==0.30.6
-torch==2.2.2
+# torch CPU-only — يوفر ~2GB من CUDA packages الزيادة
+torch==2.2.2+cpu
 numpy==1.26.4
 pyenchant==3.2.2
 python-multipart==0.0.9
